@@ -56,42 +56,39 @@
 
 ## Quick Start
 
-### 1. Install dependencies
+### Step 1 — Install all dependencies
 ```bash
 npm run install:all
 ```
+> Run this from the **root folder** (the one containing `backend/` and `frontend/`). This installs dependencies for both packages.
 
-### 2. Configure environment
+### Step 2 — First-time setup (copy .env + seed database)
 ```bash
-cp backend/.env.example backend/.env
-# Edit backend/.env with your settings
+npm run setup
 ```
+> This copies `backend/.env.example` → `backend/.env` and seeds 15 agricultural schemes into the database automatically.
 
-### 3. Seed schemes database
+### Step 3 — Start both servers
 ```bash
-npm run seed
+npm run dev
 ```
+> Starts backend on **http://localhost:5000** and frontend on **http://localhost:3000** simultaneously.
 
-### 4. Create admin account
+### Or start separately (two terminals)
 ```bash
-# Start backend
+# Terminal 1 — Backend API
 npm run dev:backend
 
-# Visit http://localhost:5000/api/admin/setup
-# POST with: { name, phone, password, setup_key: "kisan_setup_2024" }
-# Or visit http://localhost:3000/setup
-```
-
-### 5. Start development servers
-```bash
-# Terminal 1:
-npm run dev:backend
-
-# Terminal 2:
+# Terminal 2 — Frontend
 npm run dev:frontend
 ```
 
-Visit **http://localhost:3000**
+### Step 4 — Create the first admin account
+Open **http://localhost:3000/setup** in your browser.
+- Fill in admin name, phone, password
+- Setup key: `kisan_setup_2024`
+
+Then login at **http://localhost:3000/login** with the admin credentials.
 
 ## API Endpoints
 

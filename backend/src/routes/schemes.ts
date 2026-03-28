@@ -21,7 +21,8 @@ router.get('/', (_req: Request, res: Response): void => {
   }
 
   query += ' ORDER BY priority_score DESC';
-  const schemes = db.prepare(query).all(...params);
+  // Cast params: node:sqlite is strict about SQLInputValue types
+  const schemes = db.prepare(query).all(...(params as (string | number | null)[]));
   res.json(schemes);
 });
 
@@ -57,6 +58,10 @@ router.post('/', authenticateToken, requireAdmin, (req: AuthRequest, res: Respon
     return;
   }
 
+  // node:sqlite rejects undefined; coerce to null
+  const nv = (v: unknown): string | number | null =>
+    (v === undefined || v === null) ? null : v as string | number;
+
   const id = uuidv4();
   db.prepare(`
     INSERT INTO schemes (
@@ -68,11 +73,11 @@ router.post('/', authenticateToken, requireAdmin, (req: AuthRequest, res: Respon
       land_type_required, requires_bank_account, priority_score
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
-    id, name, name_hindi, ministry, category, description, description_hindi,
-    benefits, benefits_hindi, eligibility_criteria,
+    id, name, nv(name_hindi), ministry, category, description, nv(description_hindi),
+    benefits, nv(benefits_hindi), eligibility_criteria,
     JSON.stringify(required_documents),
-    application_url, helpline, deadline,
-    min_land_acres || 0, max_land_acres || null, min_income || 0, max_income || null,
+    nv(application_url), nv(helpline), nv(deadline),
+    min_land_acres || 0, nv(max_land_acres), min_income || 0, nv(max_income),
     JSON.stringify(eligible_castes || ['all']),
     JSON.stringify(eligible_states || ['all']),
     JSON.stringify(eligible_crops || ['all']),
@@ -121,7 +126,7 @@ router.put('/:id', authenticateToken, requireAdmin, (req: AuthRequest, res: Resp
   setClauses.push('updated_at = CURRENT_TIMESTAMP');
   values.push(id);
 
-  db.prepare(`UPDATE schemes SET ${setClauses.join(', ')} WHERE id = ?`).run(...values);
+  db.prepare(`UPDATE schemes SET ${setClauses.join(', ')} WHERE id = ?`).run(...(values as (string | number | null)[]));
   res.json({ message: 'Scheme updated' });
 });
 

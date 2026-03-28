@@ -1,4 +1,4 @@
-import db from '../models/database';
+import db, { runTransaction } from '../models/database';
 
 export interface FarmerProfile {
   id: string;
@@ -50,7 +50,7 @@ interface Scheme {
 }
 
 export function computeEligibleSchemes(farmer: FarmerProfile): SchemeMatch[] {
-  const schemes = db.prepare('SELECT * FROM schemes WHERE is_active = 1').all() as Scheme[];
+  const schemes = db.prepare('SELECT * FROM schemes WHERE is_active = 1').all() as unknown as Scheme[];
   const farmerCrops: string[] = JSON.parse(farmer.crops || '[]');
   const previousSchemes: string[] = JSON.parse(farmer.previously_allotted_schemes || '[]');
   const results: SchemeMatch[] = [];
@@ -183,11 +183,9 @@ export function cacheEligibility(farmerId: string): void {
     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
   `);
 
-  const insertMany = db.transaction((items: SchemeMatch[]) => {
-    items.forEach((item, index) => {
+  runTransaction(() => {
+    matches.forEach((item, index) => {
       upsert.run(farmerId, item.scheme.id, item.eligible ? 1 : 0, index + 1);
     });
   });
-
-  insertMany(matches);
 }

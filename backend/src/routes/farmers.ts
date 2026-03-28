@@ -1,10 +1,17 @@
 import { Router, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import db from '../models/database';
+import db, { runTransaction } from '../models/database';
 import { authenticateToken, requireAdmin, AuthRequest } from '../middleware/auth';
 import { computeEligibleSchemes, cacheEligibility } from '../services/eligibilityEngine';
 
 const router = Router();
+
+// node:sqlite rejects undefined; use this to coerce optional fields to null
+function n(v: unknown): string | number | null {
+  if (v === undefined || v === null) return null;
+  if (typeof v === 'boolean') return v ? 1 : 0;
+  return v as string | number;
+}
 
 // Create/update farmer profile (authenticated user)
 router.post('/profile', authenticateToken, (req: AuthRequest, res: Response): void => {
@@ -36,9 +43,9 @@ router.post('/profile', authenticateToken, (req: AuthRequest, res: Response): vo
         previously_allotted_schemes=?, updated_at=CURRENT_TIMESTAMP
       WHERE user_id=?
     `).run(
-      name, phone, aadhar,
-      state, district, village, pincode,
-      land_area_acres, land_type || 'owned', caste, annual_income,
+      n(name), n(phone), n(aadhar),
+      n(state), n(district), n(village), n(pincode),
+      n(land_area_acres), land_type || 'owned', n(caste), n(annual_income),
       JSON.stringify(crops), irrigation_type || 'rain-fed', bank_account ? 1 : 0,
       smartphone_proficiency || 'medium', preferred_language || 'hindi',
       JSON.stringify(previously_allotted_schemes || []),
@@ -62,9 +69,9 @@ router.post('/profile', authenticateToken, (req: AuthRequest, res: Response): vo
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       farmerId, userId,
-      name || userRow?.name, phone || userRow?.phone, aadhar,
-      state, district, village, pincode,
-      land_area_acres, land_type || 'owned', caste, annual_income,
+      n(name) ?? n(userRow?.name), n(phone) ?? n(userRow?.phone), n(aadhar),
+      n(state), n(district), n(village), n(pincode),
+      n(land_area_acres), land_type || 'owned', n(caste), n(annual_income),
       JSON.stringify(crops), irrigation_type || 'rain-fed', bank_account ? 1 : 0,
       smartphone_proficiency || 'medium', preferred_language || 'hindi',
       JSON.stringify(previously_allotted_schemes || []),
@@ -131,6 +138,7 @@ router.post('/survey-import', authenticateToken, requireAdmin, (req: AuthRequest
   }
 
   const created: string[] = [];
+  const findUserByPhone = db.prepare('SELECT id FROM users WHERE phone = ?');
   const insertUser = db.prepare(`
     INSERT OR IGNORE INTO users (id, name, phone, role) VALUES (?, ?, ?, 'farmer')
   `);
@@ -144,28 +152,32 @@ router.post('/survey-import', authenticateToken, requireAdmin, (req: AuthRequest
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
-  const runImport = db.transaction(() => {
+  type SV = string | number | null;
+  runTransaction(() => {
     for (const f of farmers) {
-      const userId = uuidv4();
+      const phone = f.phone as string;
+      // Try to insert user; if phone already exists, reuse the existing user id
+      const newUserId = uuidv4();
+      insertUser.run(newUserId, f.name as SV, phone);
+      const existingUser = findUserByPhone.get(phone) as { id: string } | undefined;
+      const userId = existingUser?.id ?? newUserId;
+
       const farmerId = uuidv4();
-      insertUser.run(userId, f.name, f.phone);
       insertFarmer.run(
         farmerId, userId,
-        f.name, f.phone, f.aadhar || null,
-        f.state, f.district, f.village || null, f.pincode || null,
-        f.land_area_acres, f.land_type || 'owned', f.caste, f.annual_income,
+        f.name as SV, phone, (f.aadhar as SV) || null,
+        f.state as SV, f.district as SV, (f.village as SV) || null, (f.pincode as SV) || null,
+        f.land_area_acres as SV, (f.land_type as SV) || 'owned', f.caste as SV, f.annual_income as SV,
         JSON.stringify(f.crops || []),
-        f.irrigation_type || 'rain-fed',
+        (f.irrigation_type as SV) || 'rain-fed',
         f.bank_account ? 1 : 0,
-        f.smartphone_proficiency || 'none',
-        f.preferred_language || 'hindi',
+        (f.smartphone_proficiency as SV) || 'none',
+        (f.preferred_language as SV) || 'hindi',
         JSON.stringify(f.previously_allotted_schemes || []),
       );
       created.push(farmerId);
     }
   });
-
-  runImport();
 
   // Cache eligibility for all imported farmers
   created.forEach(id => cacheEligibility(id));

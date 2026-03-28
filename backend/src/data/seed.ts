@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { initDatabase, db } from '../models/database';
+import { initDatabase, db, runTransaction } from '../models/database';
 import { v4 as uuidv4 } from 'uuid';
 
 initDatabase();
@@ -397,7 +397,7 @@ const insertScheme = db.prepare(`
   )
 `);
 
-const seedAll = db.transaction(() => {
+runTransaction(() => {
   for (const s of schemes) {
     insertScheme.run(
       uuidv4(),
@@ -413,6 +413,4 @@ const seedAll = db.transaction(() => {
     );
   }
 });
-
-seedAll();
 console.log(`Seeded ${schemes.length} agricultural schemes successfully.`);

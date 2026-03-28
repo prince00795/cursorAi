@@ -90,7 +90,7 @@ router.put('/:id', authenticateToken, (req: AuthRequest, res: Response): void =>
   updates.push('last_updated = CURRENT_TIMESTAMP');
   values.push(req.params.id);
 
-  db.prepare(`UPDATE applications SET ${updates.join(', ')} WHERE id = ?`).run(...values);
+  db.prepare(`UPDATE applications SET ${updates.join(', ')} WHERE id = ?`).run(...(values as (string | number | null)[]));
   res.json({ message: 'Application updated' });
 });
 
@@ -105,11 +105,11 @@ router.get('/admin/all', authenticateToken, requireAdmin, (req: AuthRequest, res
     JOIN schemes s ON a.scheme_id = s.id
     WHERE 1=1
   `;
-  const params: unknown[] = [];
+  const params: (string | number | null)[] = [];
 
-  if (status) { query += ' AND a.status = ?'; params.push(status); }
-  if (scheme_id) { query += ' AND a.scheme_id = ?'; params.push(scheme_id); }
-  if (farmer_id) { query += ' AND a.farmer_id = ?'; params.push(farmer_id); }
+  if (status) { query += ' AND a.status = ?'; params.push(status as string); }
+  if (scheme_id) { query += ' AND a.scheme_id = ?'; params.push(scheme_id as string); }
+  if (farmer_id) { query += ' AND a.farmer_id = ?'; params.push(farmer_id as string); }
 
   query += ' ORDER BY a.last_updated DESC';
   const apps = db.prepare(query).all(...params);

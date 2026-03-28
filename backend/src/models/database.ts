@@ -1,4 +1,4 @@
-import Database, { Database as DatabaseType } from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
 
@@ -10,11 +10,27 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-export const db: DatabaseType = new Database(DB_PATH);
+export const db = new DatabaseSync(DB_PATH);
+
+/**
+ * Run a function inside a SQLite transaction.
+ * Commits on success, rolls back on any error thrown.
+ */
+export function runTransaction<T>(fn: () => T): T {
+  db.exec('BEGIN');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
 
 export function initDatabase(): void {
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
+  db.exec('PRAGMA journal_mode = WAL');
+  db.exec('PRAGMA foreign_keys = ON');
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (

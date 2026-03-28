@@ -133,5 +133,5 @@ export function getFarmersForOutboundCalls(): CallableFarmer[] {
     )
     ORDER BY f.created_at DESC
     LIMIT 50
-  `).all() as CallableFarmer[];
+  `).all() as unknown as CallableFarmer[];
 }
